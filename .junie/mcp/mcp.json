@@ -1,0 +1,11 @@
+{
+    "mcpServers": {
+        "laravel-boost": {
+            "command": "/Users/lerum/Library/Application Support/Herd/bin/php84",
+            "args": [
+                "/Applications/MAMP/htdocs/Kadrelio/artisan",
+                "boost:mcp"
+            ]
+        }
+    }
+}
