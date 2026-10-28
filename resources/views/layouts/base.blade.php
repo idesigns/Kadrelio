@@ -12,6 +12,7 @@
 </head>
 <body class="@yield('body-class')">
     @yield('body')
+    <template id="select-chevron-icon"><x-icon name="chevron" :size="16" /></template>
     <div class="toast" id="toast" role="status" aria-live="polite">
 </div>
 </body>
