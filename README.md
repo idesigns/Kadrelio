@@ -52,7 +52,33 @@ Arkusze nie zawierają pełnej definicji automatyzacji Monday ani ID wszystkich 
 
 ## Przeniesienie na produkcję
 
-Dla stanu 1:1 po lokalnych decyzjach przenieś spójną kopię bazy oraz cały prywatny storage aplikacji, z zachowaniem dotychczasowego APP_KEY. Dotyczy to także lokalnej bazy SQLite: użyj mechanizmu backup SQLite albo zatrzymaj zapisy na czas kopiowania. Kopia samego kodu lub samych tabel Monday nie obejmuje kartotek, ustawień, dostępów i historii decyzji. Nie uruchamiaj `key:generate` po przeniesieniu zaszyfrowanej bazy. Przechowuj APP_KEY oddzielnie i poufnie.
+Produkcja kadrelio.pl korzysta z MySQL. Lokalna paczka zawiera kopię SQLite wyłącznie jako źródło danych. Komenda `kadrelio:import-snapshot` przepisuje jej rekordy do pustej bazy MySQL, zachowując identyfikatory, powiązania, poprawki, hasła, tokeny i zaszyfrowane wartości. SQLite nie staje się produkcyjnym silnikiem bazy. Do odczytu paczki potrzebne jest rozszerzenie PHP `pdo_sqlite`, a do zapisu `pdo_mysql`.
+
+W Forge ustaw `DB_CONNECTION=mysql` oraz rzeczywiste `DB_HOST`, `DB_PORT`, `DB_DATABASE`, `DB_USERNAME` i `DB_PASSWORD`. Zachowaj dotychczasowy `APP_KEY`, przekazany poufnie przez Environment. Ustaw `APP_URL=https://kadrelio.pl` i `HR_MAIL_ENABLED=false`; odśwież konfigurację. Prywatne pliki należą do trwałego shared storage, a nie katalogu konkretnego wydania kodu.
+
+Paczkę `kadrelio-state.tar.gz` i jej plik SHA-256 prześlij przez SSH/SFTP poza katalog `public`. Po sprawdzeniu sumy rozpakuj ją do osobnego katalogu, np. `/home/forge/kadrelio-transfer`. Katalog ma zawierać `database.sqlite`, `manifest.json` oraz `private`. Pliku SQLite nie kopiuj do aktywnej bazy aplikacji.
+
+Z katalogu aplikacji, po wdrożeniu aktualnego kodu i konfiguracji MySQL:
+
+```bash
+php artisan config:clear
+php artisan migrate --force --no-interaction
+php artisan kadrelio:import-snapshot /home/forge/kadrelio-transfer --no-interaction
+```
+
+Ostatnie polecenie tylko analizuje: sprawdza schemat, pustą bazę docelową, zgodność APP_KEY, integralność kopii i wszystkich plików oraz komplet dokumentów wskazanych w bazie. Zapis uruchamiaj po poprawnym wyniku analizy, w trybie konserwacji:
+
+```bash
+php artisan down
+php artisan kadrelio:import-snapshot /home/forge/kadrelio-transfer --apply --no-interaction
+php artisan monday:verify --files --no-interaction
+php artisan config:cache
+php artisan up
+```
+
+Jeśli zapis lub kontrola zgłoszą błąd, pozostaw aplikację w trybie konserwacji do wyjaśnienia. Import działa w transakcji i sprawdza wartości wszystkich rekordów przed zatwierdzeniem. Klucze obce pozostają włączone; samopowiązania są uzupełniane po wstawieniu rekordów. Różnice reprezentacji pól DATE i JSON między silnikami są porównywane według ich wartości. Istniejące dane blokują import, a istniejące pliki mogą być użyte tylko przy identycznej sumie kontrolnej. Nie ma trybu czyszczenia ani nadpisania bazy.
+
+Import pomija sesje, cache, resetowanie haseł i całą kolejkę zadań, w tym błędne zadania. Nie uruchamia zdarzeń modeli ani wysyłki wiadomości. W przypadku błędu zapisu baza zostaje wycofana, natomiast poprawnie skopiowane prywatne pliki pozostają i mogą zostać ponownie użyte. Kopia samego kodu lub samych tabel Monday nie obejmuje kartotek, ustawień, dostępów i historii decyzji. Nie uruchamiaj `key:generate` po przeniesieniu zaszyfrowanej bazy.
 
 Alternatywą jest świeża baza produkcyjna i ponowny import oryginalnego eksportu powyższymi poleceniami. Taki import odtwarza stan źródłowy, bez lokalnych późniejszych decyzji i edycji.
 
@@ -66,7 +92,7 @@ Na docelowym serwerze:
 
 ## Testy
 
-Testy korzystają wyłącznie z odizolowanej bazy SQLite w pamięci. Testy importu obejmują pełny odczyt XLSX, wersje profili, izolację firm, brak wysyłki, idempotencję, konflikty assets, audyt, równoczesne edycje i uprawnienia do plików.
+Podstawowe testy korzystają z odizolowanej bazy SQLite w pamięci. Testy importu obejmują pełny odczyt XLSX, wersje profili, izolację firm, brak wysyłki, idempotencję, konflikty assets, audyt, równoczesne edycje i uprawnienia do plików. Test paczki tworzy osobną kopię SQLite jako plik wejściowy; test rzeczywistego MySQL wymaga jawnego `KADRELIO_MYSQL_TEST_SOCKET` wskazującego odizolowaną instancję w katalogu `/tmp/kadrelio-mysql-check-*`. Tworzy nową bazę o losowej nazwie, nie czyści istniejących baz.
 
 ```bash
 php artisan test --compact tests/Feature/MondayImportTest.php tests/Feature/MondayAccessTest.php
