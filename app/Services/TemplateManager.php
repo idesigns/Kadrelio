@@ -72,8 +72,12 @@ class TemplateManager
             }
             $template->package_kinds = $primary ? array_values(array_unique([$template->kind, ...$components])) : null;
             $template->status = 'draft';
-            $template->series_key = $base?->series_key ?? (string) Str::uuid();
-            $template->version = $newVersion ? (($company->templates()->where('series_key', $template->series_key)->max('version') ?? 0) + 1) : $base->version;
+            $newSeries = ! $base || $base->getRawOriginal('kind') !== $template->kind;
+            $template->series_key = $newSeries ? (string) Str::uuid() : ($base->series_key ?? (string) Str::uuid());
+            $template->version = $newSeries ? 1 : $base->version;
+            if ($newVersion && ! $newSeries) {
+                $template->version = ($company->templates()->where('series_key', $template->series_key)->max('version') ?? 0) + 1;
+            }
             $template->revision = $newVersion ? 0 : $base->revision + 1;
             if ($newVersion || ! hash_equals($before, $template->fingerprint())) {
                 $template->forceFill(['preview_path' => null, 'preview_fingerprint' => null, 'preview_checksum' => null, 'previewed_at' => null]);
@@ -115,9 +119,6 @@ class TemplateManager
                 app(TemplateRenderer::class)->source($locked);
             }
             TemplateFields::replacements($locked, TemplateFields::sample($locked));
-            if ($locked->series_key) {
-                $locked->company->templates()->where('status', 'active')->where('series_key', $locked->series_key)->update(['status' => 'archived']);
-            }
             $active = $locked->company->templates()->where('status', 'active')->where('kind', $locked->kind)->where('agreement_type', $locked->agreement_type)
                 ->whereRaw('COALESCE(market, language) = ?', [$locked->market ?: $locked->language]);
             if ($locked->department) {

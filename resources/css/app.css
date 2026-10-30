@@ -38,8 +38,8 @@ h3 { font-size: 16px; font-weight: 600; }
 .button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 7px 15px; min-height: 34px; border: 1px solid transparent; border-radius: 4px; font-size: 14px; font-weight: 400; line-height: 20px; white-space: nowrap; transition: background-color var(--motion-fast), border-color var(--motion-fast), box-shadow var(--motion), transform var(--motion-fast) var(--ease); }
 .button-primary { background: var(--blue); color: white; }
 .button-primary:hover { background: #0060b9; }
-.button-secondary { background: white; border-color: #c3c6d4; color: var(--ink); }
-.button-secondary:hover { background: #f0f1f7; }
+.button:not(.button-primary) { background: oklch(.967 .004 270); border-color: var(--line); color: var(--ink); }
+.button:not(.button-primary):hover { background: oklch(.94 .006 270); }
 .button-full { width: 100%; }
 .button:disabled { opacity: .55; cursor: wait; }
 .icon-button { width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center; border-radius: 4px; flex-shrink: 0; }

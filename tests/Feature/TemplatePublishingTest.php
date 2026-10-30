@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Services\PdfGenerator;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\TestWith;
 use Tests\TestCase;
 use ZipArchive;
@@ -53,17 +54,73 @@ class TemplatePublishingTest extends TestCase
         $this->assertSame('active', $otherMarket->fresh()->status);
     }
 
-    public function test_updating_active_template_creates_draft_version_without_replacing_active_body(): void
+    #[TestWith(['contract', 'declaration'])]
+    #[TestWith(['declaration', 'contract'])]
+    public function test_activating_document_keeps_other_kinds_active_even_when_legacy_versions_share_a_series(string $otherKind, string $kind): void
+    {
+        Storage::fake('local');
+        $company = Company::factory()->create();
+        $otherDocument = DocumentTemplate::factory()->for($company)->create(['kind' => $otherKind, 'series_key' => (string) Str::uuid(), 'version' => 1]);
+        $previousVersion = DocumentTemplate::factory()->for($company)->create(['kind' => $kind]);
+        $draft = DocumentTemplate::factory()->for($company)->create(['kind' => $kind, 'status' => 'draft', 'series_key' => $otherDocument->series_key, 'version' => 2]);
+        $this->mock(PdfGenerator::class)->shouldReceive('render')->once()->andReturn($this->pdf());
+        $this->actingAs($company->owner)->post(route('companies.templates.preview', [$company, $draft]), ['revision' => 0])->assertSessionHasNoErrors();
+
+        $this->post(route('companies.templates.activate', [$company, $draft]), ['revision' => $draft->fresh()->revision, 'preview_confirmed' => 1])->assertSessionHasNoErrors()->assertRedirect(route('companies.templates.index', $company));
+
+        $this->assertSame('active', $otherDocument->fresh()->status);
+        $this->assertSame('active', $draft->fresh()->status);
+        $this->assertSame('archived', $previousVersion->fresh()->status);
+    }
+
+    #[TestWith(['agreement_type', 'b2b'])]
+    #[TestWith(['market', 'RO'])]
+    #[TestWith(['department', 'P2'])]
+    public function test_activation_preserves_another_application_even_when_versions_share_a_series(string $field, string $value): void
+    {
+        Storage::fake('local');
+        $company = Company::factory()->create();
+        $otherApplication = DocumentTemplate::factory()->for($company)->create(['series_key' => (string) Str::uuid(), 'version' => 1, $field => $value]);
+        $draft = DocumentTemplate::factory()->for($company)->create(['status' => 'draft', 'series_key' => $otherApplication->series_key, 'version' => 2]);
+        $this->mock(PdfGenerator::class)->shouldReceive('render')->once()->andReturn($this->pdf());
+        $this->actingAs($company->owner)->post(route('companies.templates.preview', [$company, $draft]), ['revision' => 0])->assertSessionHasNoErrors();
+
+        $this->post(route('companies.templates.activate', [$company, $draft]), ['revision' => $draft->fresh()->revision, 'preview_confirmed' => 1])->assertSessionHasNoErrors();
+
+        $this->assertSame('active', $otherApplication->fresh()->status);
+        $this->assertSame('active', $draft->fresh()->status);
+    }
+
+    #[TestWith(['active'])]
+    #[TestWith(['draft'])]
+    public function test_changing_template_kind_starts_a_separate_version_series(string $status): void
     {
         $company = Company::factory()->create();
-        $active = DocumentTemplate::factory()->for($company)->create(['body' => 'Obowiązująca treść {{full_name}}']);
+        $contract = DocumentTemplate::factory()->for($company)->create(['status' => $status, 'series_key' => (string) Str::uuid(), 'version' => 3]);
+        $contractSeries = $contract->series_key;
+
+        $this->actingAs($company->owner)->patch(route('companies.templates.update', [$company, $contract]), $this->data(['kind' => 'declaration', 'revision' => 0]))->assertSessionHasNoErrors()->assertRedirect();
+
+        $declaration = $company->templates()->latest('id')->firstOrFail();
+        $this->assertSame('declaration', $declaration->kind);
+        $this->assertNotSame($contractSeries, $declaration->series_key);
+        $this->assertSame(1, $declaration->version);
+        $this->assertSame('draft', $declaration->status);
+    }
+
+    #[TestWith(['active'])]
+    #[TestWith(['archived'])]
+    public function test_updating_published_template_creates_draft_version_without_replacing_original_body(string $status): void
+    {
+        $company = Company::factory()->create();
+        $active = DocumentTemplate::factory()->for($company)->create(['body' => 'Obowiązująca treść {{full_name}}', 'status' => $status]);
         $this->actingAs($company->owner)->patch(route('companies.templates.update', [$company, $active]), $this->data(['body' => 'Nowa treść {{full_name}}', 'revision' => 0]))->assertSessionHasNoErrors();
         $draft = $company->templates()->latest('id')->firstOrFail();
         $this->assertNotSame($active->id, $draft->id);
         $this->assertSame(2, $draft->version);
         $this->assertSame('draft', $draft->status);
         $this->assertSame('Obowiązująca treść {{full_name}}', $active->fresh()->body);
-        $this->assertSame('active', $active->fresh()->status);
+        $this->assertSame($status, $active->fresh()->status);
         $this->assertSame($active->fresh()->series_key, $draft->series_key);
     }
 
