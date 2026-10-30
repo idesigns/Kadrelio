@@ -23,7 +23,6 @@ class StoreEmployeeProfileRequest extends FormRequest
     {
         $rules = HrForms::fieldRules(HrForms::profileFields()) + HrForms::profileUploadRules();
         $rules['pesel'] = ['required', 'digits:11'];
-        $rules['age'] = ['required', 'integer', 'min:0', 'max:120'];
         $rules['birth_date'][] = 'before_or_equal:today';
         $rules['bank_account'] = ['required', 'string', 'regex:/^(?:[0-9]{26}|[A-Z]{2}[0-9A-Z]{13,32})$/'];
         $rules['privacy_consent'] = ['accepted'];
@@ -42,10 +41,14 @@ class StoreEmployeeProfileRequest extends FormRequest
     public function after(): array
     {
         return [function (Validator $validator): void {
-            if (! $validator->errors()->hasAny(['age', 'birth_date']) && (int) $this->input('age') !== Carbon::parse($this->input('birth_date'))->age) {
-                $validator->errors()->add('age', 'Podany wiek nie zgadza się z datą urodzenia.');
+            if ($validator->errors()->has('birth_date')) {
+                return;
             }
-            if ($this->input('is_student') === '1' && (int) $this->input('age') >= 26) {
+            $age = Carbon::parse($this->input('birth_date'))->age;
+            if ($age > 120) {
+                $validator->errors()->add('birth_date', 'Data urodzenia wskazuje wiek powyżej 120 lat.');
+            }
+            if ($this->input('is_student') === '1' && $age >= 26) {
                 $validator->errors()->add('is_student', 'Ta deklaracja dotyczy osób poniżej 26 roku życia.');
             }
         }];

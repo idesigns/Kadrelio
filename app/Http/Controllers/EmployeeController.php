@@ -9,6 +9,7 @@ use App\Services\HrWorkflow;
 use App\Services\MondayProjector;
 use App\Services\OutgoingMail;
 use App\Support\HrForms;
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -62,6 +63,9 @@ class EmployeeController extends Controller
             'bank_account' => ['nullable', 'string', 'regex:/^(?:[0-9]{26}|[A-Z]{2}[0-9A-Z]{13,32})$/'], 'street' => ['nullable', 'string', 'max:255'],
             'house_number' => ['nullable', 'string', 'max:60'], 'city' => ['nullable', 'string', 'max:120'], 'postal_code' => ['nullable', 'string', 'max:20'],
         ]) + HrForms::profileUploadRules());
+        if (! empty($data['birth_date'])) {
+            $data['age'] = Carbon::parse($data['birth_date'])->age;
+        }
         DB::transaction(function () use ($employee, $data, $request, $projector): void {
             $employee = Employee::whereKey($employee->id)->lockForUpdate()->firstOrFail();
             $employee->fill(collect($data)->only(['first_name', 'last_name', 'email', 'phone'])->all());

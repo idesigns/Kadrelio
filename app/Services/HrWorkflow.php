@@ -11,6 +11,7 @@ use App\Models\WorkflowRecord;
 use App\Support\HrForms;
 use App\Support\MondayFields;
 use App\Support\TemplateFields;
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -109,7 +110,7 @@ class HrWorkflow
                 $employee->pesel_hash = $hash;
             }
             $employee->fill(collect($data)->only(['first_name', 'last_name', 'email', 'phone', 'pesel'])->all());
-            $employee->personal_data = array_merge($employee->personal_data ?? [], collect($data)->except(['first_name', 'last_name', 'email', 'phone', 'pesel', 'student_documents'])->all(), ['consented_at' => now()->toIso8601String(), 'privacy_url' => $company->privacy_url]);
+            $employee->personal_data = array_merge($employee->personal_data ?? [], collect($data)->except(['first_name', 'last_name', 'email', 'phone', 'pesel', 'student_documents'])->all(), ['age' => Carbon::parse($data['birth_date'])->age, 'consented_at' => now()->toIso8601String(), 'privacy_url' => $company->privacy_url]);
             $employee->profile_completed_at = now();
             $employee->save();
             app(EmployeeFiles::class)->store($employee, $data['student_documents'] ?? []);

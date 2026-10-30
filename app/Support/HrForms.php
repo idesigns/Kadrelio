@@ -58,7 +58,6 @@ class HrForms
                 'pesel' => ['label' => 'PESEL / Personal ID number', 'required' => true, 'inputmode' => 'numeric'],
                 'passport_number' => ['label' => 'Nr paszportu / Passport number'],
                 'residence_card' => ['label' => 'Nr karty stałego pobytu / Permanent residence card number'],
-                'age' => ['label' => 'Wiek / Age', 'type' => 'number', 'required' => true],
                 'birth_date' => ['label' => 'Data urodzenia / Date of birth', 'type' => 'date', 'required' => true],
                 'birth_place' => ['label' => 'Miejsce urodzenia / Place of birth', 'required' => true],
                 'gender' => ['label' => 'Płeć / Gender', 'type' => 'select', 'options' => ['female' => 'Kobieta / Female', 'male' => 'Mężczyzna / Male'], 'required' => true],

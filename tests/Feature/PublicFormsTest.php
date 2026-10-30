@@ -17,7 +17,7 @@ class PublicFormsTest extends TestCase
     {
         $company = Company::factory()->create();
 
-        $this->get(route('forms.profile', $company->public_token))->assertOk()->assertSee('Dane do Twojej umowy')->assertSee($company->privacy_url)->assertSee('bank_account')->assertSee('university')->assertSee('disability_level');
+        $this->get(route('forms.profile', $company->public_token))->assertOk()->assertSee('Dane do Twojej umowy')->assertSee($company->privacy_url)->assertSee('bank_account')->assertSee('university')->assertSee('disability_level')->assertDontSee('name="age"', false);
     }
 
     public function test_public_profile_rejects_missing_required_fields_and_consent(): void
@@ -43,6 +43,7 @@ class PublicFormsTest extends TestCase
         $employee->refresh();
         $this->assertNotNull($employee->profile_completed_at);
         $this->assertSame('Warszawa', $employee->personal_data['city']);
+        $this->assertSame(25, $employee->personal_data['age']);
         $this->assertStringNotContainsString('00111122223333444455556666', $employee->getRawOriginal('personal_data'));
         $this->assertSame('draft', $record->fresh()->status);
         $this->assertArrayNotHasKey('role', $employee->personal_data);
@@ -235,7 +236,7 @@ class PublicFormsTest extends TestCase
 
     private function profileData(): array
     {
-        return ['first_name' => 'Anna', 'last_name' => 'Testowa', 'pesel' => '00000000001', 'age' => '25', 'birth_date' => '2001-01-01', 'birth_place' => 'Warszawa', 'country' => 'Polska', 'nationality' => 'Polskie', 'voivodeship' => 'Mazowieckie', 'county' => 'Warszawa', 'community' => 'Warszawa', 'street' => 'Przykładowa', 'city' => 'Warszawa', 'house_number' => '1', 'postal_code' => '00-001', 'post_office' => 'Warszawa', 'bank_account' => '00111122223333444455556666', 'email' => 'anna@example.test', 'phone' => '000000000', 'gender' => 'female', 'same_registered_address' => '1', 'is_unemployed' => '0', 'is_student' => '0', 'other_mandate' => '0', 'other_insurance' => '0', 'is_employed' => '0', 'on_leave' => '0', 'runs_business' => '0', 'pension' => 'none', 'has_disability' => '0', 'privacy_consent' => '1'];
+        return ['first_name' => 'Anna', 'last_name' => 'Testowa', 'pesel' => '00000000001', 'birth_date' => '2001-01-01', 'birth_place' => 'Warszawa', 'country' => 'Polska', 'nationality' => 'Polskie', 'voivodeship' => 'Mazowieckie', 'county' => 'Warszawa', 'community' => 'Warszawa', 'street' => 'Przykładowa', 'city' => 'Warszawa', 'house_number' => '1', 'postal_code' => '00-001', 'post_office' => 'Warszawa', 'bank_account' => '00111122223333444455556666', 'email' => 'anna@example.test', 'phone' => '000000000', 'gender' => 'female', 'same_registered_address' => '1', 'is_unemployed' => '0', 'is_student' => '0', 'other_mandate' => '0', 'other_insurance' => '0', 'is_employed' => '0', 'on_leave' => '0', 'runs_business' => '0', 'pension' => 'none', 'has_disability' => '0', 'privacy_consent' => '1'];
     }
 
     private function signatureData(WorkflowRecord $record): array

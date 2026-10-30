@@ -22,6 +22,7 @@ class TemplateFields
     public static function catalogue(): array
     {
         $fields = ['full_name' => 'Imię i nazwisko', 'first_name' => 'Imię', 'last_name' => 'Nazwisko', 'pesel' => 'PESEL', 'contractor_tax_id' => 'NIP kontrahenta B2B', 'email' => 'E-mail pracownika', 'phone' => 'Telefon', 'company_name' => 'Nazwa firmy', 'company_address' => 'Adres firmy', 'company_tax_id' => 'NIP firmy', 'agreement_type' => 'Typ umowy', 'department' => 'Dział', 'language' => 'Wariant umowy', 'concluded_at' => 'Data zawarcia dokumentu', 'starts_at' => 'Data rozpoczęcia', 'ends_at' => 'Data zakończenia', 'original_contract_date' => 'Data umowy pierwotnej', 'current_address' => 'Aktualny adres zamieszkania', 'today' => 'Data wygenerowania'];
+        $fields['age'] = 'Wiek / Age';
         foreach ([...HrForms::profileFields(), ...HrForms::additionalFields('amendment'), ...HrForms::additionalFields('termination')] as $key => $field) {
             $fields[$key] ??= $field['label'];
         }

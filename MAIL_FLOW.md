@@ -69,4 +69,28 @@ HR_MAIL_TEST_ADDRESS=testy@kadrelio.pl
 
 Po wdrożeniu kodu i zapisaniu konfiguracji uruchom `php artisan config:cache` i `php artisan queue:restart`. Worker kolejki musi działać. Transport przekazuje HTML, linki i załączniki PDF przez API; nie wymaga otwierania portów SMTP na DigitalOcean.
 
+## Monitoring kolejki w Horizon
+
+Panel `/horizon` i całe jego API wymagają zalogowanego administratora `admin@kadrelio.pl`. Ograniczenie działa również lokalnie. Horizon pokazuje zadania przetwarzane przez Redis po jego uruchomieniu; dotychczasowe wpisy `failed_jobs` pozostają w bazie.
+
+Na serwerze Redis i rozszerzenie PHP zostały sprawdzone. Po wdrożeniu kodu ustaw w Forge Environment:
+
+```dotenv
+QUEUE_CONNECTION=redis
+```
+
+Zachowaj aktualne ustawienia `HR_MAIL_MODE=test` i `HR_MAIL_TEST_ADDRESS`. Następnie odśwież konfigurację i obsłuż oczekujące zadania starej kolejki:
+
+```bash
+cd /home/forge/kadrelio.pl/current
+php artisan config:cache
+php artisan queue:work database --queue=default --stop-when-empty --tries=3 --timeout=80
+```
+
+Drugie polecenie wykonuje wcześniej zlecone zadania z bazy, zgodnie z aktualnymi blokadami poczty. Nie ponawia zadań z `failed_jobs`. Nowe zadania trafiają już do Redis. Nie czyść ani nie usuwaj starej kolejki.
+
+W Forge, w Overview witryny `kadrelio.pl`, włącz **Laravel Horizon** i **Laravel Scheduler**. Forge utworzy trwały proces `php artisan horizon` i scheduler. Nie dodawaj osobnego workera Redis. Przy kolejnych wdrożeniach proces Horizon musi otrzymać `php artisan horizon:terminate`; integracja Forge dodaje tę czynność do wdrożenia.
+
+Horizon utrzymuje jeden worker, maksymalnie trzy próby i timeout 80 sekund. Timeout istniejącego zadania dokumentu wynosi 70 sekund, a `retry_after` Redis domyślnie 90 sekund. Metryki są zapisywane co pięć minut; widok zadań obejmuje ostatnią dobę, a błędów ostatni tydzień. Status procesu sprawdzisz przez `php artisan horizon:status`.
+
 Nie włączono poczty ani nie wysłano wiadomości przez rzeczywisty transport w ramach tych prac.
