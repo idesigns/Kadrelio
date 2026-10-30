@@ -41,6 +41,8 @@ Logowanie i rejestracja managera, przeglądanie tablic/profili, wyszukiwanie, ko
 
 Dane istniejącego pracownika nie są ponownie rozsyłane tylko dlatego, że zostały odczytane lub odtworzone z Monday. Importowane dokumenty nie są ponownie wysyłane do podpisania bez przejęcia sprawy do nowego obiegu i jawnego kliknięcia wysyłki.
 
+Edycja zgłoszenia rekrutacyjnego przez zalogowaną osobę nie wysyła maila. Po poprawieniu e-maila lub PESEL osoby, która jeszcze nie uzupełniła profilu, stary link do formularza zostaje unieważniony. Nowy link można skopiować lub wysłać przyciskiem przypomnienia. Korekta wygenerowanego szkicu wymaga ponownego wygenerowania dokumentów przed ich wysyłką do podpisu.
+
 ## Przed świadomym uruchomieniem produkcyjnej poczty
 
 1. Potwierdzić adresy HR obu firm oraz produkcyjny adres `APP_URL` z HTTPS.

@@ -35,10 +35,10 @@ class HrWorkflow
                 }
                 $employee = $contract->employee;
             } elseif (! empty($data['employee_id'])) {
-                $employee = $company->employees()->findOrFail($data['employee_id']);
+                $employee = $company->employees()->lockForUpdate()->findOrFail($data['employee_id']);
             } else {
                 $hash = Employee::identityHash($data['pesel']);
-                $employee = $company->employees()->where('pesel_hash', $hash)->first();
+                $employee = $company->employees()->where('pesel_hash', $hash)->lockForUpdate()->first();
                 if ($employee && mb_strtolower($employee->email) !== mb_strtolower($data['email'])) {
                     throw ValidationException::withMessages(['pesel' => 'Pracownik z tym numerem PESEL ma inny adres e-mail. Wybierz go z bazy pracowników.']);
                 }
@@ -78,6 +78,61 @@ class HrWorkflow
         return $record;
     }
 
+    public function updateSubmission(WorkflowRecord $record, array $data, User $editor): void
+    {
+        DB::transaction(function () use ($record, $data, $editor): void {
+            $employee = Employee::whereKey($record->employee_id)->lockForUpdate()->firstOrFail();
+            $record = WorkflowRecord::whereKey($record->id)->lockForUpdate()->firstOrFail();
+            $record->setRelation('employee', $employee);
+            abort_unless($record->canEditSubmission(), 409, 'Zgłoszenie można edytować przed wysłaniem dokumentu do podpisu.');
+            abort_unless(hash_equals($record->submissionFingerprint(), $data['fingerprint']), 409, 'Zgłoszenie lub dane pracownika zmieniły się. Odśwież formularz przed zapisaniem.');
+            $before = $record->submissionValues();
+            if ($record->canEditSubmissionIdentity()) {
+                $hash = Employee::identityHash($data['pesel']);
+                if ($employee->company->employees()->where('pesel_hash', $hash)->where('id', '!=', $employee->id)->exists()) {
+                    throw ValidationException::withMessages(['pesel' => 'Ten PESEL jest już przypisany do innej osoby w tej firmie. Sprawdź dane pracownika.']);
+                }
+                $employee->fill(collect($data)->only(['first_name', 'last_name', 'email', 'pesel', 'department'])->all());
+                $employee->pesel_hash = $hash;
+            }
+            $record->fill(collect($data)->only(['language', 'department', 'concluded_at', 'starts_at', 'ends_at'])->all());
+            $details = array_replace($record->data ?? [], collect($data)->only(['reporter_name', 'reporter_email', 'agreement_type', 'contractor_tax_id'])->all());
+            if ($data['agreement_type'] !== 'b2b') {
+                unset($details['contractor_tax_id']);
+            }
+            $record->data = $details;
+            $after = $record->submissionValues();
+            if ($before === $after) {
+                return;
+            }
+            $edit = ['user_id' => $editor->id, 'edited_at' => now()->toIso8601String(), 'before' => $before, 'after' => $after];
+            $documentFields = ['document_identity', 'document_company_name', 'document_parts', 'template_versions'];
+            if ($record->generated_at) {
+                $edit['previous_document'] = [
+                    'generated_at' => $record->generated_at->toIso8601String(), 'html' => $record->document_html,
+                    'hash' => $record->document_hash, 'pdf_path' => $record->pdf_path,
+                    'data' => collect($details)->only($documentFields)->all(),
+                ];
+            }
+            foreach ($documentFields as $field) {
+                unset($details[$field]);
+            }
+            $details['submission_edits'][] = $edit;
+            if ($employee->isDirty(['email', 'pesel'])) {
+                $employee->form_token = Str::random(64);
+                $employee->form_expires_at = now()->addDays(config('hr.link_days'));
+            }
+            if ($employee->isDirty()) {
+                $employee->save();
+            }
+            $record->forceFill([
+                'data' => $details, 'status' => $employee->profile_completed_at ? 'draft' : 'awaiting_data',
+                'generated_at' => null, 'document_html' => null, 'document_hash' => null, 'pdf_path' => null,
+                'signing_token' => Str::random(64), 'signing_expires_at' => null, 'mail_status' => null, 'mail_sent_at' => null,
+            ])->save();
+        });
+    }
+
     public function inviteEmployee(Employee $employee): void
     {
         abort_if(($employee->personal_data['profile_review_required'] ?? false), 409, 'Najpierw wybierz lub zweryfikuj dane pracownika z Monday.');
@@ -95,10 +150,11 @@ class HrWorkflow
         return DB::transaction(function () use ($company, $data, $employee): Employee {
             $hash = Employee::identityHash($data['pesel']);
             if ($employee) {
+                $formToken = $employee->form_token;
                 $employee = $company->employees()->whereKey($employee->id)->lockForUpdate()->firstOrFail();
-                abort_if($employee->profile_completed_at || $employee->form_expires_at?->isPast(), 410, 'Formularz został już wysłany lub link wygasł.');
-                if (! hash_equals($employee->pesel_hash ?? '', $hash) || mb_strtolower($employee->email) !== $data['email']) {
-                    throw ValidationException::withMessages(['pesel' => 'PESEL i e-mail muszą zgadzać się ze zgłoszeniem do umowy. Skontaktuj się z działem HR.']);
+                abort_if($employee->profile_completed_at || ! $employee->form_expires_at || $employee->form_expires_at->isPast() || ! hash_equals((string) $formToken, (string) $employee->form_token), 410, 'Formularz został już wysłany lub link wygasł.');
+                if ($company->employees()->where('pesel_hash', $hash)->where('id', '!=', $employee->id)->exists()) {
+                    throw ValidationException::withMessages(['pesel' => 'Ten numer PESEL jest już przypisany do innego profilu w tej firmie. Skontaktuj się z działem HR.']);
                 }
             } else {
                 if ($company->employees()->where('pesel_hash', $hash)->exists()) {
@@ -107,8 +163,8 @@ class HrWorkflow
                 $employee = new Employee;
                 $employee->company()->associate($company);
                 $employee->form_token = Str::random(64);
-                $employee->pesel_hash = $hash;
             }
+            $employee->pesel_hash = $hash;
             $employee->fill(collect($data)->only(['first_name', 'last_name', 'email', 'phone', 'pesel'])->all());
             $employee->personal_data = array_merge($employee->personal_data ?? [], collect($data)->except(['first_name', 'last_name', 'email', 'phone', 'pesel', 'student_documents'])->all(), ['age' => Carbon::parse($data['birth_date'])->age, 'consented_at' => now()->toIso8601String(), 'privacy_url' => $company->privacy_url]);
             $employee->profile_completed_at = now();

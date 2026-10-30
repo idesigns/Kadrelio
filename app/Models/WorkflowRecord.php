@@ -52,6 +52,41 @@ class WorkflowRecord extends Model
         return isset($this->data['monday_source']) && ! ($this->data['monday_workflow_active'] ?? false);
     }
 
+    public function canEditSubmission(): bool
+    {
+        return $this->kind === 'contract'
+            && ! isset($this->data['monday_source'])
+            && ! $this->signed_at
+            && in_array($this->status, ['awaiting_data', 'draft', 'ready'], true);
+    }
+
+    public function canEditSubmissionIdentity(): bool
+    {
+        return $this->canEditSubmission()
+            && ! $this->employee->profile_completed_at
+            && ! $this->employee->records()->where('id', '!=', $this->id)->exists()
+            && ! $this->employee->mondayItems()->exists();
+    }
+
+    public function submissionFingerprint(): string
+    {
+        return hash_hmac('sha256', json_encode([$this->getRawOriginal(), $this->employee->getRawOriginal(), $this->canEditSubmissionIdentity()], JSON_THROW_ON_ERROR), config('app.key'));
+    }
+
+    public function submissionValues(): array
+    {
+        return [
+            'first_name' => $this->employee->first_name, 'last_name' => $this->employee->last_name,
+            'email' => $this->employee->email, 'pesel' => $this->employee->pesel,
+            'agreement_type' => $this->data['agreement_type'] ?? 'mandate',
+            'contractor_tax_id' => $this->data['contractor_tax_id'] ?? '',
+            'reporter_name' => $this->data['reporter_name'] ?? '', 'reporter_email' => $this->data['reporter_email'] ?? '',
+            'language' => $this->language, 'department' => $this->department,
+            'concluded_at' => $this->concluded_at?->format('Y-m-d'),
+            'starts_at' => $this->starts_at?->format('Y-m-d'), 'ends_at' => $this->ends_at?->format('Y-m-d'),
+        ];
+    }
+
     public function isB2b(): bool
     {
         if ($this->isImported()) {

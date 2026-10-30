@@ -7,8 +7,12 @@ use App\Mail\HrMessage;
 use App\Models\Company;
 use App\Models\Employee;
 use App\Models\WorkflowRecord;
+use App\Services\HrWorkflow;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Str;
+use PHPUnit\Framework\Attributes\TestWith;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 use Tests\TestCase;
 
 class PublicFormsTest extends TestCase
@@ -51,14 +55,79 @@ class PublicFormsTest extends TestCase
         $this->post(route('onboarding.show', $employee->form_token), $this->profileData())->assertGone();
     }
 
-    public function test_profile_identity_must_match_the_recruitment(): void
+    #[TestWith(['00000000001', 'old@example.test'])]
+    #[TestWith(['00000000002', 'anna@example.test'])]
+    #[TestWith(['00000000002', 'old@example.test'])]
+    public function test_individual_profile_can_correct_recruitment_identity(string $pesel, string $email): void
+    {
+        $this->travelTo('2026-10-20 12:00:00');
+        $employee = Employee::factory()->create(['pesel' => $pesel, 'pesel_hash' => Employee::identityHash($pesel), 'email' => $email]);
+        $record = WorkflowRecord::factory()->for($employee->company)->for($employee)->create();
+        Mail::fake();
+
+        $this->post(route('onboarding.show', $employee->form_token), $this->profileData())->assertSessionHasNoErrors()->assertRedirect(route('forms.success'));
+
+        $employee->refresh();
+        $this->assertNotNull($employee->profile_completed_at);
+        $this->assertSame('00000000001', $employee->pesel);
+        $this->assertSame(Employee::identityHash('00000000001'), $employee->pesel_hash);
+        $this->assertSame('anna@example.test', $employee->email);
+        $this->assertSame('draft', $record->fresh()->status);
+        $this->assertDatabaseCount('employees', 1);
+        Mail::assertQueued(HrMessage::class, fn (HrMessage $mail): bool => $mail->hasTo($employee->company->hr_email));
+    }
+
+    public function test_individual_profile_cannot_take_another_employees_pesel(): void
     {
         $this->travelTo('2026-10-20 12:00:00');
         $employee = Employee::factory()->create();
+        $other = Employee::factory()->completed()->for($employee->company)->create(['pesel' => '00000000001', 'pesel_hash' => Employee::identityHash('00000000001')]);
+        $original = $employee->fresh()->getRawOriginal();
+        $otherOriginal = $other->fresh()->getRawOriginal();
         Mail::fake();
 
-        $this->post(route('onboarding.show', $employee->form_token), $this->profileData())->assertSessionHasErrors('pesel');
-        $this->assertNull($employee->fresh()->profile_completed_at);
+        $this->post(route('onboarding.show', $employee->form_token), $this->profileData())
+            ->assertSessionHasErrors(['pesel' => 'Ten numer PESEL jest już przypisany do innego profilu w tej firmie. Skontaktuj się z działem HR.']);
+
+        $this->assertSame($original, $employee->fresh()->getRawOriginal());
+        $this->assertSame($otherOriginal, $other->fresh()->getRawOriginal());
+        $this->assertDatabaseCount('employees', 2);
+        Mail::assertNothingQueued();
+    }
+
+    public function test_identity_correction_does_not_modify_employee_in_another_company(): void
+    {
+        $this->travelTo('2026-10-20 12:00:00');
+        $other = Employee::factory()->completed()->create(['pesel' => '00000000001', 'pesel_hash' => Employee::identityHash('00000000001')]);
+        $employee = Employee::factory()->create(['pesel' => '00000000002', 'pesel_hash' => Employee::identityHash('00000000002')]);
+        $original = $other->fresh()->getRawOriginal();
+        Mail::fake();
+
+        $this->post(route('onboarding.show', $employee->form_token), $this->profileData())->assertSessionHasNoErrors()->assertRedirect(route('forms.success'));
+
+        $this->assertSame('00000000001', $employee->fresh()->pesel);
+        $this->assertSame($original, $other->fresh()->getRawOriginal());
+        $this->assertDatabaseCount('employees', 2);
+        Mail::assertQueued(HrMessage::class, fn (HrMessage $mail): bool => $mail->hasTo($employee->company->hr_email));
+    }
+
+    public function test_token_revoked_after_opening_form_cannot_complete_profile(): void
+    {
+        $this->travelTo('2026-10-20 12:00:00');
+        $employee = Employee::factory()->create();
+        $stale = $employee->fresh();
+        $employee->forceFill(['form_token' => Str::random(64)])->save();
+        $original = $employee->fresh()->getRawOriginal();
+        Mail::fake();
+
+        try {
+            app(HrWorkflow::class)->completeProfile($employee->company, $this->profileData(), $stale);
+            $this->fail('Unieważniony link nie może zapisać formularza.');
+        } catch (HttpException $exception) {
+            $this->assertSame(410, $exception->getStatusCode());
+        }
+
+        $this->assertSame($original, $employee->fresh()->getRawOriginal());
         Mail::assertNothingQueued();
     }
 

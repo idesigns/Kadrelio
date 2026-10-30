@@ -170,6 +170,118 @@ class EmployeeProfileFieldsTest extends TestCase
         $this->assertSame('age', TemplateFields::suggest('<<column_firstrow:Wiek/Age>>'));
     }
 
+    #[TestWith(['retired'])]
+    #[TestWith(['disability'])]
+    public function test_profile_saves_the_decision_number_for_retirement_and_disability_pensions(string $pension): void
+    {
+        $company = Company::factory()->create();
+        Mail::fake();
+        $data = array_replace($this->profileData(), ['pension' => $pension, 'pension_payer' => 'ZUS', 'pension_decision' => 'DEC/123']);
+
+        $this->post(route('forms.profile', $company->public_token), $data)->assertSessionHasNoErrors()->assertRedirect(route('forms.success'));
+
+        $this->assertSame('DEC/123', $company->employees()->firstOrFail()->personal_data['pension_decision']);
+    }
+
+    public function test_retirement_pension_requires_the_decision_number(): void
+    {
+        $company = Company::factory()->create();
+        Mail::fake();
+        $data = array_replace($this->profileData(), ['pension' => 'retired', 'pension_payer' => 'ZUS']);
+
+        $this->post(route('forms.profile', $company->public_token), $data)->assertSessionHasErrors('pension_decision');
+
+        $this->assertDatabaseCount('employees', 0);
+        Mail::assertNothingQueued();
+    }
+
+    public function test_approval_monday_declaration_renders_answers_saved_by_the_profile_form(): void
+    {
+        $company = Company::factory()->create();
+        Mail::fake();
+        $data = array_replace($this->profileData(), [
+            'family_name' => 'Nowak', 'father_name' => 'Jan', 'mother_name' => 'Ewa',
+            'passport_number' => 'AB1234567', 'residence_card' => 'XYZ12345', 'apartment_number' => '2',
+            'nfz_branch' => 'Mazowiecki', 'tax_office' => 'Urząd Skarbowy Warszawa',
+            'is_employed' => '1', 'employer' => 'Zakład pracy', 'working_time' => 'half', 'employment_period' => 'fixed',
+            'employment_from' => '2026-01-01', 'employment_to' => '2026-12-31', 'employment_gross_pay' => '6000.00',
+            'on_leave' => '1', 'leave_from' => '2026-10-01', 'leave_to' => '2026-10-31',
+            'other_mandate' => '1', 'mandate_company' => 'Inny zleceniodawca',
+            'mandate_from' => '2026-02-01', 'mandate_to' => '2026-11-30', 'mandate_gross_pay' => '2000.00',
+            'runs_business' => '1', 'zus_level' => 'other', 'zus_legal_basis' => 'Podstawa wskazana przez pracownika',
+            'pension' => 'disability', 'pension_payer' => 'ZUS', 'pension_decision' => 'DEC/123',
+            'has_disability' => '1', 'disability_level' => 'moderate',
+            'is_student' => '1', 'university' => 'Uczelnia, Warszawa', 'is_unemployed' => '1',
+            'voluntary_sickness_insurance' => '1', 'voluntary_pension_insurance' => '0',
+        ]);
+
+        $this->post(route('forms.profile', $company->public_token), $data)->assertSessionHasNoErrors()->assertRedirect(route('forms.success'));
+
+        $employee = $company->employees()->firstOrFail();
+        $record = WorkflowRecord::factory()->for($company)->for($employee)->create(['concluded_at' => '2026-10-24', 'ends_at' => '2026-12-31']);
+        $expected = [
+            'Approval Baza pracowników - Legitymacje' => 'Testowa',
+            'Imię' => 'Anna',
+            'Drugie imię' => 'Maria',
+            'Imię Ojca' => 'Jan',
+            'Imie Matki' => 'Ewa',
+            'Data urodzenia' => '01.01.2001',
+            'Miejsce urodzenia' => 'Warszawa',
+            'Nazwisko rodowe' => 'Nowak',
+            'Obywatelstwo' => 'Polskie',
+            'PESEL' => '00000000001',
+            'Nr paszportu' => 'AB1234567',
+            'Nr karty stałego pobytu' => 'XYZ12345',
+            'Województwo' => 'Mazowieckie',
+            'Powiat' => 'Warszawa',
+            'Gmina zamieszkania' => 'Warszawa',
+            'Ulica' => 'Przykładowa',
+            'Nr domu' => '1',
+            'Nr lokalu' => '2',
+            'Kod pocztowy' => '00-001',
+            'Miejscowość zamieszkania' => 'Warszawa',
+            'Poczta zamieszkania' => 'Warszawa',
+            'Oddział NFZ' => 'Mazowiecki',
+            'Urząd Skarbowy' => 'Urząd Skarbowy Warszawa',
+            'Tel. kontaktowy' => '000000000',
+            'Nr konta bankowego' => '00111122223333444455556666',
+            'Data zawarcia umowy formularz' => '24.10.2026',
+            'Data zakończenia umowy formularz' => '31.12.2026',
+            'Jestem również zatrudniony na podstawie umowy o prace' => 'Tak',
+            'Nazwa zakładu pracy (UoP)' => 'Zakład pracy',
+            'Wymiar etatu' => '½ etatu',
+            'Od: data UoP' => '01.01.2026',
+            'Do: data UoP' => '31.12.2026',
+            'Przebywam na urlopie macierzyńskim/wychowawczym/bezpłatnym' => 'Tak',
+            'Macierzyński Od' => '01.10.2026',
+            'Macierzyński Do' => '31.10.2026',
+            'Jestem zatrudniony na podtsawie innych umów zlecenia' => 'Tak',
+            'Data zawarcia umowy zlecenia (1)' => '01.02.2026',
+            'Data końca umowy zlecenia (1)' => '30.11.2026',
+            'Nazwa firmy zlecenia (1)' => 'Inny zleceniodawca',
+            'Prowadzę działalność gospodatrczą i opłacam składki ZUS:' => 'Tak',
+            'Wymiar opłacanych składek' => 'Inna wysokość składki',
+            'Jestem emerytem lub rencistą:' => 'Rencista',
+            'Nr decyzji:' => 'DEC/123',
+            'Posiadam orzeczenie o niepełnosprawności:' => 'Tak',
+            'Stopień niepełnosprawności:' => 'Umiarkowany',
+            'Jestem uczniem szkoły ponadpodstawowej/studentem i nie ukończyłem/am 26 lat:' => 'Tak',
+            'Nazwa i adres uczelni' => 'Uczelnia, Warszawa',
+            'Jestem zarejestrowany/a jako osoba bezrobotna:' => 'Tak',
+            'Proszę o objęcie mnie dobrowolnym ubezpieczeniem chorobowym:' => 'Tak',
+            'Proszę o objęcie mnie dobrowolnym ubezpieczniem emerytalno-rentowym:' => 'Nie',
+        ];
+        $tokens = array_map(fn (string $label): string => '<<column_firstrow:'.$label.'>>', array_keys($expected));
+        $template = DocumentTemplate::factory()->for($company)->make(['body' => implode("\n", $tokens)."\n{{employment_gross_pay}}\n{{mandate_gross_pay}}\n{{zus_legal_basis}}"]);
+        $replacements = TemplateFields::replacements($template, TemplateFields::values($record));
+
+        $this->assertSame(array_combine($tokens, array_values($expected)) + [
+            '{{employment_gross_pay}}' => '6000.00',
+            '{{mandate_gross_pay}}' => '2000.00',
+            '{{zus_legal_basis}}' => 'Podstawa wskazana przez pracownika',
+        ], $replacements);
+    }
+
     public function test_missing_required_profile_answer_cannot_be_silently_omitted_from_template(): void
     {
         $record = WorkflowRecord::factory()->create();

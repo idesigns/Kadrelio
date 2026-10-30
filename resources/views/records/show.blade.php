@@ -8,7 +8,10 @@
 <h1>{{ $record->employee->fullName() }}</h1>
 <p>{{ \App\Support\HrForms::kinds()[$record->kind] }} <span class="inline-dot">·</span> {{ $record->department ?? $company->name }}</p>
 </div>
+<div class="board-header-actions">
+@if($record->canEditSubmission())<a class="button button-secondary" href="{{ route('companies.records.edit', [$company, $record, 'panel' => request()->boolean('panel') ? 1 : null]) }}"><x-icon name="file-pen" :size="16" /> Edytuj zgłoszenie</a>@endif
 <span class="status status-{{ $record->status }} detail-status">{{ $record->statusLabel() }}</span>
+</div>
 </header>
 <div class="record-content">
 @if(in_array($record->kind, ['contract', 'amendment', 'termination']))<ol class="workflow-steps">@foreach(['Zgłoszenie' => true, 'Dane pracownika' => (bool) $record->employee->profile_completed_at, 'Dokumenty' => (bool) $record->generated_at, 'Podpis' => (bool) $record->signed_at] as $label => $complete)<li class="{{ $complete ? 'complete' : '' }}">

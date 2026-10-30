@@ -134,7 +134,7 @@ class HrForms
                 'zus_legal_basis' => ['label' => 'Podstawa prawna opłacanych składek / Legal basis for contributions', 'when' => ['runs_business', '1']],
                 'pension' => ['label' => 'Emerytura lub renta / Pension status', 'type' => 'select', 'options' => ['none' => 'Nie jestem', 'retired' => 'Emeryt', 'disability' => 'Rencista'], 'required' => true],
                 'pension_payer' => ['label' => 'Kto wypłaca emeryturę/rentę? / Who pays?', 'when' => ['pension', 'retired|disability'], 'required' => true],
-                'pension_decision' => ['label' => 'Nr decyzji rentowej / Pension decision number', 'when' => ['pension', 'disability'], 'required' => true],
+                'pension_decision' => ['label' => 'Nr decyzji emerytalnej/rentowej / Pension decision number', 'when' => ['pension', 'retired|disability'], 'required' => true],
                 'has_disability' => ['label' => 'Posiadam orzeczenie o niepełnosprawności / I have a disability certificate', 'type' => 'select', 'options' => $yesNo, 'required' => true],
                 'disability_level' => ['label' => 'Stopień niepełnosprawności / Disability level', 'type' => 'select', 'options' => ['mild' => 'Lekki', 'moderate' => 'Umiarkowany', 'severe' => 'Znaczny'], 'when' => ['has_disability', '1'], 'required' => true],
             ],

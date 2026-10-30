@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreWorkflowRequest;
+use App\Http\Requests\UpdateSubmissionRequest;
 use App\Jobs\SendWorkflowMail;
 use App\Models\Company;
 use App\Models\WorkflowRecord;
@@ -32,6 +33,26 @@ class WorkflowController extends Controller
         $record = $workflow->create($company, $kind, $request->validated(), $request->user());
 
         return redirect()->route('companies.records.show', [$company, $record])->with('success', 'Zgłoszenie zostało zapisane.'.($record->status === 'awaiting_data' ? (app(OutgoingMail::class)->enabled() ? ' Zaproszenie do formularza danych dodano do kolejki e-mail.' : ' Wysyłka e-mail jest wyłączona; możesz skopiować link do formularza.') : ' Możesz wygenerować dokumenty.'));
+    }
+
+    public function edit(Company $company, WorkflowRecord $record): View
+    {
+        Gate::authorize('view', $company);
+        abort_unless($record->canEditSubmission(), 409, 'Zgłoszenie można edytować przed wysłaniem dokumentu do podpisu.');
+        $record->load('employee');
+
+        return view('records.form', [
+            'company' => $company, 'record' => $record, 'kind' => 'contract',
+            'values' => $record->submissionValues(), 'canEditIdentity' => $record->canEditSubmissionIdentity(),
+        ]);
+    }
+
+    public function updateSubmission(UpdateSubmissionRequest $request, Company $company, WorkflowRecord $record, HrWorkflow $workflow): RedirectResponse
+    {
+        $workflow->updateSubmission($record, $request->validated(), $request->user());
+
+        return redirect()->route('companies.records.show', [$company, $record, 'panel' => $request->boolean('panel') ? 1 : null])
+            ->with('success', 'Zgłoszenie zostało zaktualizowane. Zapis nie wysyła wiadomości e-mail.');
     }
 
     public function show(Request $request, Company $company, WorkflowRecord $record): View|RedirectResponse

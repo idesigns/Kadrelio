@@ -106,6 +106,17 @@ class DocxTemplateTest extends TestCase
         $this->assertSame(['{{company_name}}' => 'Firma A', '{{full_name}}' => 'Anna'], TemplateFields::replacements($template, ['company_name' => 'Firma A', 'full_name' => 'Anna']));
     }
 
+    public function test_ambiguous_monday_salary_code_is_not_automatically_assigned_to_both_salaries(): void
+    {
+        $token = '<<column_firstrow:Wynagrodzenie z tytułu stosunku pracy wynosi:>>';
+        $template = new DocumentTemplate(['body' => 'Etat: '.$token.' Zlecenie: '.$token]);
+
+        $this->expectException(ValidationException::class);
+        $this->expectExceptionMessage('Przypisz dane Kadrelio do pola '.$token.'.');
+
+        TemplateFields::replacements($template, ['employment_gross_pay' => '6000.00', 'mandate_gross_pay' => '2000.00']);
+    }
+
     public function test_docugen_table_macros_are_not_silently_rendered_as_fields(): void
     {
         $template = new DocumentTemplate(['body' => '<<table_body>>']);

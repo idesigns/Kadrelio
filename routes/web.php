@@ -71,6 +71,8 @@ Route::middleware(PrivateResponse::class)->group(function (): void {
             Route::get('/records/new/{kind}', [WorkflowController::class, 'create'])->whereIn('kind', ['contract', 'amendment', 'termination'])->name('records.create');
             Route::post('/records/new/{kind}', [WorkflowController::class, 'store'])->whereIn('kind', ['contract', 'amendment', 'termination'])->middleware('throttle:20,1')->name('records.store');
             Route::get('/records/{record}', [WorkflowController::class, 'show'])->name('records.show');
+            Route::get('/records/{record}/edit', [WorkflowController::class, 'edit'])->name('records.edit');
+            Route::patch('/records/{record}/submission', [WorkflowController::class, 'updateSubmission'])->defaults('kind', 'contract')->name('records.submission.update');
             Route::patch('/records/{record}', [WorkflowController::class, 'update'])->name('records.update');
             Route::post('/records/{record}/generate', [WorkflowController::class, 'generate'])->name('records.generate');
             Route::post('/records/{record}/send', [WorkflowController::class, 'send'])->middleware('throttle:5,1')->name('records.send');
