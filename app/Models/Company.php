@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Attributes\Scope;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -12,9 +13,15 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 #[Fillable(['name', 'tax_id', 'address', 'hr_email', 'privacy_url', 'color'])]
+#[Hidden(['recruitment_password'])]
 class Company extends Model
 {
     use HasFactory;
+
+    protected function casts(): array
+    {
+        return ['recruitment_password' => 'hashed'];
+    }
 
     public function owner(): BelongsTo
     {

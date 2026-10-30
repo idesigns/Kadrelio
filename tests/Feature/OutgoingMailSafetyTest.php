@@ -14,6 +14,7 @@ use Illuminate\Mail\Events\MessageSending;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Queue;
+use PHPUnit\Framework\Attributes\DataProvider;
 use ReflectionClass;
 use Symfony\Component\Mime\Email;
 use Tests\TestCase;
@@ -112,6 +113,31 @@ class OutgoingMailSafetyTest extends TestCase
         $message = (new Email)->from('from@example.test')->to('to@example.test')->subject('Test');
         $this->assertFalse(Event::until(new MessageSending($message)));
         $message->getHeaders()->addTextHeader('X-Kadrelio-Mail-Approved', 'yes');
+        $this->assertFalse(Event::until(new MessageSending($message)));
+        $message->getHeaders()->addTextHeader('X-Kadrelio-Mail-Mode', 'test');
         $this->assertNull(Event::until(new MessageSending($message)));
+    }
+
+    #[DataProvider('modeChanges')]
+    public function test_queued_document_is_suppressed_after_mode_change(string $before, string $after): void
+    {
+        config(['hr.mail_mode' => $before]);
+        $record = WorkflowRecord::factory()->sent()->create(['mail_status' => 'queued']);
+        $job = unserialize(serialize(new SendWorkflowMail($record->id)));
+        config(['hr.mail_mode' => $after]);
+        Mail::fake();
+        $pdf = $this->mock(PdfGenerator::class);
+        $pdf->shouldNotReceive('save');
+
+        $job->handle($pdf);
+
+        $this->assertSame('suppressed', $record->fresh()->mail_status);
+        $this->assertNull($record->fresh()->mail_sent_at);
+        Mail::assertNothingOutgoing();
+    }
+
+    public static function modeChanges(): array
+    {
+        return [['test', 'live'], ['live', 'test']];
     }
 }

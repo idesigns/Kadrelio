@@ -10,6 +10,7 @@ use App\Http\Controllers\InvitationController;
 use App\Http\Controllers\LandingController;
 use App\Http\Controllers\MondayController;
 use App\Http\Controllers\PublicFormController;
+use App\Http\Controllers\RecruitmentController;
 use App\Http\Controllers\TemplateController;
 use App\Http\Controllers\WorkflowController;
 use App\Http\Middleware\PrivateResponse;
@@ -25,6 +26,9 @@ Route::middleware(PrivateResponse::class)->group(function (): void {
     });
     Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth')->name('logout');
     Route::get('/f/dziekujemy', [PublicFormController::class, 'success'])->name('forms.success');
+    Route::get('/f/{company:public_token}/contract', [RecruitmentController::class, 'show'])->name('recruitment.show');
+    Route::post('/f/{company:public_token}/contract/unlock', [RecruitmentController::class, 'unlock'])->middleware('throttle:recruitment-unlock')->name('recruitment.unlock');
+    Route::post('/f/{company:public_token}/contract', [RecruitmentController::class, 'store'])->defaults('kind', 'contract')->middleware('throttle:recruitment-submit')->name('recruitment.store');
     Route::get('/f/{company:public_token}/profile', [PublicFormController::class, 'profile'])->name('forms.profile');
     Route::post('/f/{company:public_token}/profile', [PublicFormController::class, 'storeProfile'])->middleware('throttle:10,1');
     Route::get('/f/{company:public_token}/{kind}', [PublicFormController::class, 'additional'])->whereIn('kind', ['data_change', 'multisport'])->name('forms.additional');

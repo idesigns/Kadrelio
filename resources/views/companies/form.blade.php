@@ -25,6 +25,17 @@
 </div>
 </fieldset>
 <fieldset>
+<legend>Zewnętrzne zgłoszenia umów</legend>
+<p class="fieldset-description">Rekruterka może zgłosić nową umowę bez konta, korzystając z linku i hasła tej firmy.</p>
+<div class="form-grid">
+<x-field name="password" :field="['label' => $company?->recruitment_password ? 'Nowe hasło formularza' : 'Hasło formularza', 'type' => 'password', 'autocomplete' => 'new-password', 'hint' => 'Minimum 8 znaków. Puste pole zachowuje dotychczasowe hasło. Zmiana hasła wymaga ponownego odblokowania formularza.']"/>
+</div>
+@if($company && app(\App\Services\RecruitmentAccess::class)->enabled($company))
+<p class="field-hint">Link dla rekrutera: <a class="text-link" href="{{ route('recruitment.show', $company->public_token) }}" target="_blank" rel="noopener">Otwórz formularz zgłoszenia</a></p>
+<button class="button button-secondary" type="button" data-copy="{{ route('recruitment.show', $company->public_token) }}">Kopiuj link dla rekrutera</button>
+@endif
+</fieldset>
+<fieldset>
 <legend>Oznaczenie przestrzeni</legend>
 <div class="color-options">@foreach(['green' => 'Zielony', 'purple' => 'Fioletowy', 'blue' => 'Niebieski', 'orange' => 'Pomarańczowy'] as $value => $label)<label>
 <input type="radio" name="color" value="{{ $value }}" @checked(old('color', $company?->color ?? 'green') === $value) required>

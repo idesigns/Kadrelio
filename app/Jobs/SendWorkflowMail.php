@@ -27,9 +27,12 @@ class SendWorkflowMail implements ShouldBeUnique, ShouldQueue
 
     public bool $deliveryApproved = false;
 
+    public ?string $deliveryMode = null;
+
     public function __construct(public int $recordId, public bool $statement = false)
     {
         $this->deliveryApproved = app(OutgoingMail::class)->enabled();
+        $this->deliveryMode = $this->deliveryApproved ? app(OutgoingMail::class)->mode() : null;
     }
 
     public function uniqueId(): string
@@ -40,7 +43,7 @@ class SendWorkflowMail implements ShouldBeUnique, ShouldQueue
     public function handle(PdfGenerator $pdf): void
     {
         $record = WorkflowRecord::with(['company', 'employee'])->findOrFail($this->recordId);
-        if (! app(OutgoingMail::class)->enabled() || ! $this->deliveryApproved) {
+        if (! app(OutgoingMail::class)->approved($this->deliveryApproved, $this->deliveryMode)) {
             if ($record->mail_status === 'queued') {
                 $record->forceFill(['mail_status' => 'suppressed'])->save();
             }

@@ -18,14 +18,20 @@ class HrMessage extends Mailable implements ShouldBeEncrypted
 
     public bool $deliveryApproved = false;
 
+    public ?string $deliveryMode = null;
+
     public function __construct(public string $title, public string $messageText, public ?string $actionUrl = null, public string $actionLabel = 'Otwórz formularz', public array $files = [])
     {
         $this->deliveryApproved = app(OutgoingMail::class)->enabled();
+        $this->deliveryMode = $this->deliveryApproved ? app(OutgoingMail::class)->mode() : null;
     }
 
     public function headers(): Headers
     {
-        return new Headers(text: ['X-Kadrelio-Mail-Approved' => $this->deliveryApproved ? 'yes' : 'no']);
+        return new Headers(text: [
+            'X-Kadrelio-Mail-Approved' => $this->deliveryApproved ? 'yes' : 'no',
+            'X-Kadrelio-Mail-Mode' => $this->deliveryMode ?? 'none',
+        ]);
     }
 
     public function envelope(): Envelope

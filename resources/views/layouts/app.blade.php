@@ -101,7 +101,10 @@
     @if($company && !$company->hasFormConfiguration() && !request()->boolean('panel') && !request()->routeIs('companies.edit'))
     <div class="flash flash-info"><x-icon name="settings" :size="18" /><div>Uzupełnij ustawienia firmy, aby uruchomić formularze i nowe zgłoszenia. @can('update', $company)<a class="text-link" href="{{ route('companies.edit', $company) }}">Przejdź do ustawień</a>@endcan</div></div>
     @endif
-    @if(!app(\App\Services\OutgoingMail::class)->enabled() && !request()->boolean('panel'))<div class="flash flash-info"><x-icon name="mail" :size="18"/><div>Wysyłka e-mail jest wyłączona. Wiadomości nie są wysyłane ani odkładane do późniejszej wysyłki.</div></div>@endif
+    @unless(request()->boolean('panel'))
+    @if(!app(\App\Services\OutgoingMail::class)->enabled())<div class="flash flash-info"><x-icon name="mail" :size="18"/><div>Wysyłka e-mail jest wyłączona. Wiadomości nie są wysyłane ani odkładane do późniejszej wysyłki.</div></div>
+    @elseif(app(\App\Services\OutgoingMail::class)->mode() === 'test')<div class="flash flash-info"><x-icon name="mail" :size="18"/><div>Tryb testowy poczty: wszystkie wiadomości trafiają wyłącznie na {{ config('hr.mail_test_address') }}.</div></div>@endif
+    @endunless
     @yield('content')
 </main>
 @unless(request()->boolean('panel'))

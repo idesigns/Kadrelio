@@ -15,7 +15,7 @@
 </div>
 <div class="links-intro">
 <x-icon name="link" :size="20" />
-<p>Formularze pracownika działają bez logowania. Zgłoszenia HR są dostępne dla zespołu firmy po zalogowaniu. @can('update', $company)<a class="text-link" href="{{ route('companies.profile-preview', $company) }}" target="_blank" rel="noopener">Podgląd pełnego formularza danych</a>@endcan</p>
+<p>Formularze pracownika działają bez logowania. Zgłoszenie nowej umowy jest dostępne dla rekrutera po wpisaniu hasła firmy. Aneksy i rozwiązania zgłasza zespół po zalogowaniu. @can('update', $company)<a class="text-link" href="{{ route('companies.profile-preview', $company) }}" target="_blank" rel="noopener">Podgląd pełnego formularza danych</a>@endcan</p>
 </div>
 <div class="board-canvas">
 <section class="board-group group-blue">
@@ -35,15 +35,17 @@
 </tr>
 </thead>
 <tbody>
-@php($forms = [['Zgłoszenie nowej umowy', 'Zespół HR', route('companies.records.create', [$company, 'contract'])], ['Formularz danych osobowych', 'Pracownik', route('forms.profile', $company->public_token)], ['Zgłoszenie aneksu', 'Zespół HR', route('companies.records.create', [$company, 'amendment'])], ['Rozwiązanie umowy', 'Zespół HR', route('companies.records.create', [$company, 'termination'])], ['Zmiana danych osobowych', 'Pracownik', route('forms.additional', [$company->public_token, 'data_change'])], ['Multisport - zgoda na potrącenia', 'Pracownik', route('forms.additional', [$company->public_token, 'multisport'])]])
-@foreach($forms as [$label, $audience, $url])<tr>
+@php($forms = [['Zgłoszenie nowej umowy', 'Rekruter - hasło', route('recruitment.show', $company->public_token)], ['Formularz danych osobowych', 'Pracownik', route('forms.profile', $company->public_token)], ['Zgłoszenie aneksu', 'Zespół HR', route('companies.records.create', [$company, 'amendment'])], ['Rozwiązanie umowy', 'Zespół HR', route('companies.records.create', [$company, 'termination'])], ['Zmiana danych osobowych', 'Pracownik', route('forms.additional', [$company->public_token, 'data_change'])], ['Multisport - zgoda na potrącenia', 'Pracownik', route('forms.additional', [$company->public_token, 'multisport'])]])
+@foreach($forms as [$label, $audience, $url])
+@php($available = $company->hasFormConfiguration() && ($audience !== 'Rekruter - hasło' || filled($company->recruitment_password)))
+<tr>
 <td>
 <x-icon name="{{ $audience === 'Pracownik' ? 'users' : 'file-pen' }}" :size="17" /> {{ $label }}</td>
 <td>
 <span class="tag {{ $audience === 'Pracownik' ? 'tag-purple' : '' }}">{{ $audience }}</span>
 </td>
 <td>
-@if($company->hasFormConfiguration())
+@if($available)
 <a class="cell-link" href="{{ $url }}" target="_blank" rel="noopener">{{ $url }}</a>
 @else
 <span class="muted">Formularz wymaga uzupełnienia ustawień firmy.</span>
@@ -51,7 +53,7 @@
 @endif
 </td>
 <td>
-<button class="icon-button" type="button" @if($company->hasFormConfiguration()) data-copy="{{ $url }}" @endif @disabled(! $company->hasFormConfiguration()) aria-label="Kopiuj link: {{ $label }}">
+<button class="icon-button" type="button" @if($available) data-copy="{{ $url }}" @endif @disabled(! $available) aria-label="Kopiuj link: {{ $label }}">
 <x-icon name="copy" :size="17" />
 </button>
 </td>

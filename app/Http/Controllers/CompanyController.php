@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Company;
+use Closure;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -28,6 +29,9 @@ class CompanyController extends Controller
             $company = new Company($data);
             $company->owner_id = $request->user()->id;
             $company->public_token = Str::random(64);
+            if ($request->filled('password')) {
+                $company->recruitment_password = $request->string('password')->toString();
+            }
             $company->save();
             $company->users()->attach($request->user());
 
@@ -49,20 +53,32 @@ class CompanyController extends Controller
     {
         Gate::authorize('view', $company);
         Gate::authorize('update', $company);
-        $company->update($this->validated($request));
+        $company->fill($this->validated($request));
+        if ($request->filled('password')) {
+            $company->recruitment_password = $request->string('password')->toString();
+        }
+        $company->save();
 
         return back()->with('success', 'Ustawienia firmy zostały zapisane.');
     }
 
     private function validated(Request $request): array
     {
-        return $request->validate([
+        $data = $request->validate([
             'name' => ['required', 'string', 'max:150'],
             'tax_id' => ['nullable', 'string', 'max:20'],
             'address' => ['nullable', 'string', 'max:1000'],
             'hr_email' => ['required', 'email', 'max:255'],
             'privacy_url' => ['required', 'url:http,https', 'max:1000'],
             'color' => ['required', Rule::in(['green', 'purple', 'blue', 'orange'])],
+            'password' => ['bail', 'nullable', 'string', 'min:8', 'max:72', function (string $attribute, mixed $value, Closure $fail): void {
+                if (strlen($value) > 72) {
+                    $fail('Hasło formularza jest zbyt długie.');
+                }
+            }],
         ]);
+        unset($data['password']);
+
+        return $data;
     }
 }

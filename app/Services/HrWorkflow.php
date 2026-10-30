@@ -18,7 +18,7 @@ use Illuminate\Validation\ValidationException;
 
 class HrWorkflow
 {
-    public function create(Company $company, string $kind, array $data, User $creator): WorkflowRecord
+    public function create(Company $company, string $kind, array $data, ?User $creator): WorkflowRecord
     {
         if (! $company->hasFormConfiguration()) {
             throw ValidationException::withMessages(['company' => 'Najpierw uzupełnij adres HR i link do informacji RODO w ustawieniach firmy.']);
